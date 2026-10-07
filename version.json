@@ -1,0 +1,8 @@
+{
+  "app_name": "ClassroomGestureMouse",
+  "latest_version": "1.0.0",
+  "minimum_supported_version": "1.0.0",
+  "release_date": "2026-10-07",
+  "download_url": "https://github.com/mbaqir18786/HandGesture/releases/latest/download/ClassroomGestureMouse.exe",
+  "release_notes": "Initial release: Multi-Person Tracking, SFace Deep Biometrics, and Dual-Mode Touch-Free Mouse Engine."
+}

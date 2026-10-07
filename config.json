@@ -1,0 +1,101 @@
+{
+  "app_name": "ClassroomGestureMouse",
+  "version": "1.0.0",
+  "camera": {
+    "device_index": 0,
+    "fallback_indices": [
+      1,
+      2
+    ],
+    "backend": "DSHOW",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "flip_horizontal": true,
+    "buffer_size": 1,
+    "auto_reconnect": true,
+    "reconnect_interval_sec": 2.0
+  },
+  "security": {
+    "teacher_pin": "1234",
+    "scan_duration_sec": 3.5,
+    "zero_trust_policy": true,
+    "lost_timeout_sec": 2.0,
+    "re_lock_cooldown_sec": 1.0,
+    "face_match_threshold": 0.68,
+    "body_hist_threshold": 0.72,
+    "body_aspect_ratio_tolerance": 0.2,
+    "standing_detection_ratio": 1.4
+  },
+  "near_mode": {
+    "enabled": true,
+    "max_distance_meters": 3.5,
+    "model_path": "live_mouse_control_using_hand_gestures/hand_landmarker.task",
+    "tracking_landmark": 5,
+    "smoothing": 5.0,
+    "deadzone_px": 5.0,
+    "interaction_box": {
+      "x_min": 0.22,
+      "x_max": 0.78,
+      "y_min": 0.2,
+      "y_max": 0.6
+    },
+    "pinch_close_threshold": 32.0,
+    "pinch_open_threshold": 45.0,
+    "double_tap_window_sec": 0.4,
+    "detection_confidence": 0.6,
+    "tracking_confidence": 0.6
+  },
+  "far_mode": {
+    "enabled": true,
+    "min_distance_meters": 3.5,
+    "max_distance_meters": 10.0,
+    "tracking_joint": "RIGHT_WRIST",
+    "relative_movement_gain_x": 2.5,
+    "relative_movement_gain_y": 2.2,
+    "dwell_time_sec": 1.0,
+    "dwell_radius_px": 25.0,
+    "one_euro_filter": {
+      "min_cutoff": 1.0,
+      "beta": 0.05,
+      "d_cutoff": 1.0
+    }
+  },
+  "tracking": {
+    "yolo_model": "yolov8n-pose.pt",
+    "min_person_confidence": 0.5,
+    "bytetrack_track_thresh": 0.45,
+    "bytetrack_match_thresh": 0.8,
+    "bytetrack_buffer": 30
+  },
+  "voice_feedback": {
+    "enabled": true,
+    "tts_engine": "pyttsx3",
+    "speech_rate": 180,
+    "volume": 0.9,
+    "alerts": {
+      "locked": "Teacher locked. Gesture control active.",
+      "lost": "Teacher lost. Mouse control frozen.",
+      "relocked": "Welcome back teacher. Control restored.",
+      "unauthorized": "Access denied."
+    }
+  },
+  "ui": {
+    "theme": "dark",
+    "always_on_top_indicator": true,
+    "indicator_size_px": 16,
+    "show_debug_feed": true,
+    "status_colors": {
+      "locked": "#00FF66",
+      "lost": "#FFCC00",
+      "inactive": "#888888",
+      "scanning": "#00E5FF"
+    }
+  },
+  "updates": {
+    "enabled": true,
+    "check_on_startup": true,
+    "update_url": "https://raw.githubusercontent.com/mbaqir18786/HandGesture/main/version.json",
+    "releases_page": "https://github.com/mbaqir18786/HandGesture/releases"
+  }
+}
