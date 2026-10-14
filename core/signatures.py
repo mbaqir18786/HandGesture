@@ -51,8 +51,8 @@ class BiometricSignatures:
             return []
 
         h, w = frame.shape[:2]
-        # Fast 320x180 resolution for 3.5ms detection
-        target_w, target_h = 320, 180
+        # 640x360 resolution for fast detection while preserving distant faces
+        target_w, target_h = 640, 360
         scale_x = w / float(target_w)
         scale_y = h / float(target_h)
 
@@ -65,27 +65,73 @@ class BiometricSignatures:
             if faces is not None:
                 for face in faces:
                     # Scale back to original frame coordinates
-                    fx1 = int(face[0] * scale_x)
-                    fy1 = int(face[1] * scale_y)
-                    fw = int(face[2] * scale_x)
-                    fh = int(face[3] * scale_y)
+                    scaled_face = face.copy()
+                    # Scale all X coordinates
+                    for xi in (0, 2, 4, 6, 8, 10, 12):
+                        scaled_face[xi] *= scale_x
+                    # Scale all Y coordinates
+                    for yi in (1, 3, 5, 7, 9, 11, 13):
+                        scaled_face[yi] *= scale_y
 
-                    if fw < 20 or fh < 20:
+                    fx1 = int(scaled_face[0])
+                    fy1 = int(scaled_face[1])
+                    fw = int(scaled_face[2])
+                    fh = int(scaled_face[3])
+
+                    if fw < 18 or fh < 18:
                         continue
 
-                    # Crop and align face from full original frame
-                    aligned = cls._face_recognizer.alignCrop(small_frame, face)
+                    # Crop and align face from the FULL high-resolution original frame
+                    aligned = cls._face_recognizer.alignCrop(frame, scaled_face)
                     embedding = cls._face_recognizer.feature(aligned)
 
                     results.append({
                         "box": (fx1, fy1, fx1 + fw, fy1 + fh),
                         "center": (fx1 + fw // 2, fy1 + fh // 2),
                         "embedding": embedding.copy(),
+                        "width": fw,
+                        "height": fh,
+                        "score": float(face[14]),
                     })
-        except Exception:
+        except Exception as e:
             pass
 
         return results
+
+    @classmethod
+    def match_person_to_face_info(
+        cls,
+        person_bbox: Tuple[int, int, int, int],
+        detected_faces: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Finds the most centered face dictionary belonging to a person's upper body."""
+        px1, py1, px2, py2 = person_bbox
+        upper_y2 = py1 + int((py2 - py1) * 0.55)
+        pcx = (px1 + px2) // 2
+        p_head_y = py1 + int((py2 - py1) * 0.18)
+
+        best_face = None
+        min_dist = float("inf")
+
+        for f in detected_faces:
+            fcx, fcy = f["center"]
+            if (px1 - 20) <= fcx <= (px2 + 20) and (py1 - 30) <= fcy <= upper_y2:
+                dist = abs(fcx - pcx) + abs(fcy - p_head_y)
+                if dist < min_dist:
+                    min_dist = dist
+                    best_face = f
+
+        if best_face is not None:
+            box = best_face["box"]
+            fw = box[2] - box[0]
+            fh = box[3] - box[1]
+            return {
+                "embedding": best_face["embedding"],
+                "box": box,
+                "width": fw,
+                "height": fh,
+            }
+        return None
 
     @classmethod
     def match_person_to_face(
@@ -94,14 +140,8 @@ class BiometricSignatures:
         detected_faces: List[Dict[str, Any]],
     ) -> Optional[np.ndarray]:
         """Finds the face embedding belonging to a person."""
-        px1, py1, px2, py2 = person_bbox
-        upper_y2 = py1 + int((py2 - py1) * 0.55)
-
-        for f in detected_faces:
-            fcx, fcy = f["center"]
-            if px1 <= fcx <= px2 and py1 <= fcy <= upper_y2:
-                return f["embedding"]
-        return None
+        info = cls.match_person_to_face_info(person_bbox, detected_faces)
+        return info["embedding"] if info is not None else None
 
     @classmethod
     def extract_body_signature(
@@ -138,6 +178,151 @@ class BiometricSignatures:
         }
 
     @classmethod
+    def extract_face_for_person(
+        cls,
+        frame: np.ndarray,
+        person_bbox: Tuple[int, int, int, int],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Extracts face directly from high-resolution upper body crop.
+        Essential for distant individuals (> 3m) where full-frame downscaling loses facial details.
+        """
+        cls.initialize_models()
+        if cls._face_detector is None or cls._face_recognizer is None or frame is None:
+            return None
+
+        h, w = frame.shape[:2]
+        px1, py1, px2, py2 = person_bbox
+        bw = max(1, px2 - px1)
+        bh = max(1, py2 - py1)
+
+        # Crop head region: from slightly above py1 to upper 45% of body
+        cy1 = max(0, int(py1 - bh * 0.08))
+        cy2 = min(h, int(py1 + bh * 0.45))
+        cx1 = max(0, int(px1 - bw * 0.10))
+        cx2 = min(w, int(px2 + bw * 0.10))
+
+        crop_h = cy2 - cy1
+        crop_w = cx2 - cx1
+        if crop_w < 20 or crop_h < 20:
+            return None
+
+        crop = frame[cy1:cy2, cx1:cx2]
+        try:
+            cls._face_detector.setInputSize((crop_w, crop_h))
+            _, faces = cls._face_detector.detect(crop)
+
+            # Fallback for distant/dim faces (> 4m): CLAHE contrast enhancement on luminance channel
+            if (faces is None or len(faces) == 0) and crop_w >= 20 and crop_h >= 20:
+                try:
+                    lab = cv2.cvtColor(crop, cv2.COLOR_BGR2LAB)
+                    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+                    lab[:, :, 0] = clahe.apply(lab[:, :, 0])
+                    enhanced_crop = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+                    _, faces = cls._face_detector.detect(enhanced_crop)
+                except Exception:
+                    pass
+
+            if faces is not None and len(faces) > 0:
+                best_face = faces[0]
+                scaled_face = best_face.copy()
+                for xi in (0, 2, 4, 6, 8, 10, 12):
+                    scaled_face[xi] += cx1
+                for yi in (1, 3, 5, 7, 9, 11, 13):
+                    scaled_face[yi] += cy1
+
+                fw = int(scaled_face[2])
+                fh = int(scaled_face[3])
+                fx1 = int(scaled_face[0])
+                fy1 = int(scaled_face[1])
+
+                aligned = cls._face_recognizer.alignCrop(frame, scaled_face)
+                embedding = cls._face_recognizer.feature(aligned)
+
+                return {
+                    "box": (fx1, fy1, fx1 + fw, fy1 + fh),
+                    "center": (fx1 + fw // 2, fy1 + fh // 2),
+                    "embedding": embedding.copy(),
+                    "width": fw,
+                    "height": fh,
+                    "score": float(best_face[14]),
+                }
+        except Exception:
+            pass
+        return None
+
+    @classmethod
+    def extract_body_proportions(cls, keypoints: np.ndarray) -> Optional[np.ndarray]:
+        """
+        Extracts distance-invariant body proportion ratios from COCO 17 keypoints:
+        1. Shoulder width / Torso length
+        2. Upper arm length / Forearm length
+        3. Leg length / Torso length
+        Returns 3-D numpy array of ratios, or None if keypoint confidences are insufficient.
+        """
+        if keypoints is None or len(keypoints) < 17:
+            return None
+
+        def _dist(idx1, idx2):
+            return math.hypot(keypoints[idx1][0] - keypoints[idx2][0], keypoints[idx1][1] - keypoints[idx2][1])
+
+        def _conf(idx):
+            return keypoints[idx][2]
+
+        # 1. Shoulder width: 5 (left shoulder) to 6 (right shoulder)
+        if _conf(5) < 0.35 or _conf(6) < 0.35:
+            return None
+        shoulder_w = _dist(5, 6)
+
+        # 2. Torso length: shoulders midpoint to hips (11, 12) midpoint
+        if _conf(11) < 0.35 or _conf(12) < 0.35:
+            return None
+        sh_mid = ((keypoints[5][0] + keypoints[6][0]) / 2.0, (keypoints[5][1] + keypoints[6][1]) / 2.0)
+        hip_mid = ((keypoints[11][0] + keypoints[12][0]) / 2.0, (keypoints[11][1] + keypoints[12][1]) / 2.0)
+        torso_len = math.hypot(sh_mid[0] - hip_mid[0], sh_mid[1] - hip_mid[1])
+        if torso_len < 10.0:
+            return None
+
+        ratio_shoulder_torso = shoulder_w / torso_len
+
+        # 3. Arm ratio: upper arm (5->7 or 6->8) / forearm (7->9 or 8->10)
+        arm_ratios = []
+        if _conf(5) > 0.35 and _conf(7) > 0.35 and _conf(9) > 0.35:
+            u_arm = _dist(5, 7)
+            f_arm = _dist(7, 9)
+            if f_arm > 5.0:
+                arm_ratios.append(u_arm / f_arm)
+        if _conf(6) > 0.35 and _conf(8) > 0.35 and _conf(10) > 0.35:
+            u_arm = _dist(6, 8)
+            f_arm = _dist(8, 10)
+            if f_arm > 5.0:
+                arm_ratios.append(u_arm / f_arm)
+        ratio_arm = np.median(arm_ratios) if arm_ratios else 1.0
+
+        # 4. Leg to torso ratio: hip to ankle (11->15 or 12->16)
+        leg_lens = []
+        if _conf(11) > 0.35 and _conf(13) > 0.35 and _conf(15) > 0.35:
+            leg_lens.append(_dist(11, 13) + _dist(13, 15))
+        if _conf(12) > 0.35 and _conf(14) > 0.35 and _conf(16) > 0.35:
+            leg_lens.append(_dist(12, 14) + _dist(14, 16))
+        ratio_leg_torso = (np.median(leg_lens) / torso_len) if leg_lens else 1.8
+
+        return np.array([ratio_shoulder_torso, ratio_arm, ratio_leg_torso], dtype=np.float32)
+
+    @classmethod
+    def match_body_proportions(cls, prop1: Optional[np.ndarray], prop2: Optional[np.ndarray]) -> float:
+        """
+        Compares two body proportion vectors.
+        Returns similarity score between 0.0 and 1.0.
+        """
+        if prop1 is None or prop2 is None:
+            return 0.5  # Neutral when unobserved
+        diff = np.abs(prop1 - prop2) / np.maximum(np.abs(prop1), 1e-3)
+        avg_err = float(np.mean(diff))
+        sim = max(0.0, 1.0 - (avg_err / 0.25))
+        return float(np.clip(sim, 0.0, 1.0))
+
+    @classmethod
     def match_body(cls, sig1: Optional[Dict[str, Any]], sig2: Optional[Dict[str, Any]]) -> float:
         if sig1 is None or sig2 is None:
             return 0.0
@@ -167,3 +352,4 @@ class BiometricSignatures:
             return is_match, float(cosine)
         except Exception:
             return False, 0.0
+

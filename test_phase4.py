@@ -138,7 +138,12 @@ def run_phase4_diagnostics():
     )
 
     security = SecurityEngine(
-        lost_timeout_sec=config.get("security.lost_timeout_sec", 0.8),
+        lost_timeout_sec=config.get("security.lost_timeout_sec", 1.0),
+        face_match_threshold=config.get("security.face_match_threshold", 0.40),
+        relock_consecutive_frames=config.get("security.relock_consecutive_frames", 8),
+        min_face_size_px=config.get("security.min_face_size_px", 32),
+        periodic_face_interval_sec=config.get("security.periodic_face_interval_sec", 2.5),
+        adaptive_gallery_max=config.get("security.adaptive_gallery_max", 10),
     )
 
     # Dual-Mode Mouse Controller
@@ -221,9 +226,9 @@ def run_phase4_diagnostics():
             if teacher_person is not None:
                 distance_m = teacher_person.distance_info.get("distance_m", 1.0)
                 current_mode = teacher_person.distance_info.get("mode", "NEAR")
-            elif persons:
-                distance_m = persons[0].distance_info.get("distance_m", 1.0)
-                current_mode = persons[0].distance_info.get("mode", "NEAR")
+            else:
+                distance_m = 0.0
+                current_mode = "IDLE"
 
             # 4. Draw Interaction Box
             bx1, by1 = int(interaction_box["x_min"] * w), int(interaction_box["y_min"] * h)

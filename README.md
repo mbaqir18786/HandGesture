@@ -47,6 +47,39 @@ Click the link below to download the direct `.exe` file:
 
 ---
 
+## 🎙️ Multimodal Voice Commands & Smart Dictation
+
+Control apps, search the web, manage browser/Notepad tabs, and dictate text completely hands-free while your hands guide the pointer:
+
+| Category | Voice Commands | Action Performed |
+| :--- | :--- | :--- |
+| **App Launching & Exit** | `"Open Notepad"`, `"Close Notepad"` | Launches or closes Notepad window cleanly |
+| | `"Open Chrome"`, `"Close Chrome"` | Launches or closes Google Chrome |
+| | `"Open Calculator"`, `"Close Calculator"` | Opens or closes Windows Calculator |
+| | `"Close App"` / `"Close Window"` | Closes active application (`Alt+F4`) |
+| **Tab Management** | `"New Tab"` / `"Open New Tab"` | Opens a new tab in Notepad / Chrome (`Ctrl+T`) |
+| *(Notepad & Chrome)* | `"Close Tab"` | Closes current tab (`Ctrl+W`) |
+| | `"Next Tab"` / `"Previous Tab"` | Cycles between active tabs (`Ctrl+Tab` / `Ctrl+Shift+Tab`) |
+| | `"New Window"` / `"Save File"` | Opens new document (`Ctrl+N`) / Saves file (`Ctrl+S`) |
+| **Voice Dictation** | `"Write <text>"` / `"Type <text>"` | Dictates text directly into Notepad, Word, or search boxes |
+| | `"New line"` / `"Press enter"` | Presses Enter key |
+| | `"Backspace"` / `"Delete"` | Erases last character / word |
+| | `"Select all"`, `"Copy"`, `"Paste"` | Standard clipboard shortcuts |
+| **Web Search** | `"Search <query>"` (e.g. `"Search AI"`) | Opens Google search in Chrome/browser for the query |
+| **Mouse Actions** | `"Click"` / `"Left Click"` | Fires left mouse click at current pointer position |
+| | `"Right Click"` / `"Double Click"` | Opens context menu / double clicks |
+| | `"Scroll Down"` / `"Scroll Up"` | Scrolls active document or page |
+| | `"Zoom In"` / `"Zoom Out"` | Zooms web page or slide (`Ctrl +/-`) |
+| **Gesture Mouse Pause** | Click `⏸️` button on Floating Pill | Stops hand gesture cursor movement (Voice-Only Mode) |
+| *(Voice-Only Mode)* | Click `⏸️ Pause Mouse` in Control Hub | Freely talk & dictate without hand gestures moving cursor |
+| | Press **`F8`** or **`Ctrl+Shift+M`** | Instant keyboard shortcut to toggle pause/resume |
+| | `"Pause mouse"` / `"Stop mouse"` | Voice command to pause gesture cursor |
+| | `"Resume mouse"` / `"Start mouse"` | Voice command to resume gesture tracking |
+| **Presentation Mode** | `"Next slide"` / `"Previous slide"` | Advances or goes back in PowerPoint/PDFs |
+| | `"Fullscreen"` / `"Exit presentation"` | Starts slideshow (`F5`) or exits (`Esc`) |
+
+---
+
 ## 🔄 Automatic In-App Updates
 
 Whenever a new version or update is released:
@@ -88,11 +121,18 @@ pip install -r requirements.txt
 python app.py
 ```
 
-### 4. Build Standalone `.exe`
-```bash
-python build_app.py
-```
-The compiled single-file binary will be generated at `dist/ClassroomGestureMouse.exe`.
+### 4. Build Standalone Application
+- **🚀 Fast-Launch Mode (Recommended — Opens in 1–2 seconds)**:
+  ```bash
+  python build_app.py --onedir
+  ```
+  Generates `dist/ClassroomGestureMouse/`. Double-click `ClassroomGestureMouse.exe` inside to run instantly with zero decompression lag! Copy the folder to any pen drive.
+
+- **📦 Single Portable `.exe` Mode**:
+  ```bash
+  python build_app.py --onefile
+  ```
+  Generates a single self-extracting file at `dist/ClassroomGestureMouse.exe`.
 
 ---
 

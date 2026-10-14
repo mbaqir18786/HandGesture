@@ -1,5 +1,5 @@
 import sys
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton
 from PyQt6.QtCore import Qt, QPoint, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QBrush, QPen, QFont
 
@@ -8,12 +8,14 @@ class FloatingStatusIndicator(QWidget):
     """
     Minimalist, Always-on-Top Floating Status Pill for Classroom Smart Screens.
     - Draggable anywhere on the screen.
-    - Vibrant status dot (Green = Locked, Yellow = Lost, Gray = Inactive).
+    - Vibrant status dot (Green = Locked, Yellow = Lost, Gray = Inactive, Amber = Paused).
     - Displays Mode (NEAR / FAR) and distance.
     - Clicking toggles the Teacher Control Hub.
+    - Direct Pause/Resume button for Voice-Only Mode.
     """
 
     clicked = pyqtSignal()
+    pause_toggled = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -32,14 +34,17 @@ class FloatingStatusIndicator(QWidget):
         self.status_text = "OFF"
         self.mode_text = "NEAR"
         self.distance_text = "0.0m"
+        self.is_paused = False
 
-        self.setFixedSize(170, 42)
+        self.setFixedSize(225, 42)
+        self._voice_override = False
+        self._last_state = "IDLE"
         self._init_ui()
 
     def _init_ui(self):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 4, 12, 4)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 4, 10, 4)
+        layout.setSpacing(6)
 
         # Spacer for custom drawn status dot
         self.dot_spacer = QLabel()
@@ -49,12 +54,107 @@ class FloatingStatusIndicator(QWidget):
         # Text labels
         self.label_info = QLabel("ClassroomMouse")
         self.label_info.setStyleSheet("color: #E0E0E0; font-family: 'Segoe UI', Arial; font-size: 11px; font-weight: bold;")
-        layout.addWidget(self.label_info)
+        layout.addWidget(self.label_info, stretch=1)
+
+        # Pause / Resume Button
+        self.btn_pause = QPushButton("⏸️")
+        self.btn_pause.setFixedSize(26, 26)
+        self.btn_pause.setToolTip("Pause / Resume Hand Gesture Mouse (Voice-Only Mode)")
+        self.btn_pause.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_pause.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 0.12);
+                color: #FFFFFF;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 13px;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 0.25);
+            }
+        """)
+        self.btn_pause.clicked.connect(self._on_pause_btn_clicked)
+        layout.addWidget(self.btn_pause)
+
+    def _on_pause_btn_clicked(self):
+        self.is_paused = not self.is_paused
+        self.set_paused(self.is_paused)
+        self.pause_toggled.emit(self.is_paused)
+
+    def set_paused(self, paused: bool):
+        """Programmatically update the pause button visual state."""
+        self.is_paused = paused
+        if paused:
+            self.btn_pause.setText("▶️")
+            self.btn_pause.setToolTip("Resume Hand Gesture Mouse (F8)")
+            self.btn_pause.setStyleSheet("""
+                QPushButton {
+                    background-color: #D97706;
+                    color: #FFFFFF;
+                    border: 1px solid #F59E0B;
+                    border-radius: 13px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: #B45309;
+                }
+            """)
+            self.status_color = QColor(245, 158, 11)  # Amber
+            self.label_info.setText("PAUSED • VOICE ONLY")
+            self.label_info.setStyleSheet("color: #F59E0B; font-family: 'Segoe UI', Arial; font-size: 10px; font-weight: bold;")
+        else:
+            self.btn_pause.setText("⏸️")
+            self.btn_pause.setToolTip("Pause Hand Gesture Mouse (F8)")
+            self.btn_pause.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(255, 255, 255, 0.12);
+                    color: #FFFFFF;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    border-radius: 13px;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 0px;
+                }
+                QPushButton:hover {
+                    background-color: rgba(255, 255, 255, 0.25);
+                }
+            """)
+            self.update_status(self._last_state, self.mode_text, float(self.distance_text.replace("m", "") or 0))
+        self.update()
+
+    def show_voice_badge(self, message: str):
+        """Displays temporary voice command badge on the floating pill."""
+        from PyQt6.QtCore import QTimer
+        self._voice_override = True
+        self.label_info.setText(f"🎤 {message}")
+        self.label_info.setStyleSheet("color: #00E5FF; font-family: 'Segoe UI', Arial; font-size: 11px; font-weight: bold;")
+        self.status_color = QColor(0, 229, 255)
+        self.update()
+        QTimer.singleShot(2500, self._revert_voice_badge)
+
+    def _revert_voice_badge(self):
+        self._voice_override = False
+        self.update_status(self._last_state, self.mode_text, float(self.distance_text.replace("m", "") or 0))
 
     def update_status(self, state_str: str, mode_str: str, distance_m: float):
         """Updates the indicator colors and text."""
+        self._last_state = state_str
         self.mode_text = mode_str
         self.distance_text = f"{distance_m:.1f}m"
+
+        if self._voice_override:
+            return
+
+        if self.is_paused:
+            self.status_color = QColor(245, 158, 11)  # Amber
+            self.label_info.setText("PAUSED • VOICE ONLY")
+            self.label_info.setStyleSheet("color: #F59E0B; font-family: 'Segoe UI', Arial; font-size: 10px; font-weight: bold;")
+            self.update()
+            return
 
         if state_str in ("LOCKED", "RE_LOCKED"):
             self.status_color = QColor(0, 255, 102)  # Vibrant Green

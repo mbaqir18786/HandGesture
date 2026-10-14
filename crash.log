@@ -1,0 +1,221 @@
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 692, in _process_frame
+    state, teacher_id, metadata = self.security.update(frame, self.persons)
+                                  ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\core\security_engine.py", line 323, in update
+    faces = BiometricSignatures.extract_face_embeddings_from_frame(frame)
+  File "C:\Computer-Vision-main\core\signatures.py", line 86, in extract_face_embeddings_from_frame
+    embedding = cls._face_recognizer.feature(aligned)
+KeyboardInterrupt
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 810, in _process_frame
+    self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\core\mouse_controller.py", line 176, in process_near_mode
+    detect_result = self._hand_landmarker.detect_for_video(mp_image, frame_ts_ms)
+                                                           ^^^^^^^^
+NameError: name 'mp_image' is not defined
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 810, in _process_frame
+    self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\core\mouse_controller.py", line 176, in process_near_mode
+    detect_result = self._hand_landmarker.detect_for_video(mp_image, frame_ts_ms)
+                                                           ^^^^^^^^
+NameError: name 'mp_image' is not defined
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 810, in _process_frame
+    self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\core\mouse_controller.py", line 176, in process_near_mode
+    self._mp_timestamp_ms = frame_ts_ms
+    
+NameError: name 'mp_image' is not defined
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 810, in _process_frame
+    self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\core\mouse_controller.py", line 176, in process_near_mode
+    self._mp_timestamp_ms = frame_ts_ms
+    
+NameError: name 'mp_image' is not defined
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 810, in _process_frame
+    self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\core\mouse_controller.py", line 176, in process_near_mode
+    self._mp_timestamp_ms = frame_ts_ms
+    
+NameError: name 'mp_image' is not defined
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 810, in _process_frame
+    self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\core\mouse_controller.py", line 176, in process_near_mode
+    self._mp_timestamp_ms = frame_ts_ms
+    
+NameError: name 'mp_image' is not defined
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 810, in _process_frame
+    self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\core\mouse_controller.py", line 176, in process_near_mode
+    self._mp_timestamp_ms = frame_ts_ms
+    
+NameError: name 'mp_image' is not defined
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 810, in _process_frame
+  File "C:\Computer-Vision-main\core\mouse_controller.py", line 178, in process_near_mode
+    detect_result = self._hand_landmarker.detect_for_video(mp_image, frame_ts_ms)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\mediapipe\tasks\python\vision\hand_landmarker.py", line 513, in detect_for_video
+    self._lib.MpHandLandmarkerDetectForVideo(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self._handle,
+        ^^^^^^^^^^^^^
+    ...<3 lines>...
+        ctypes.byref(c_result),
+        ^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\mediapipe\tasks\python\core\serial_dispatcher.py", line 74, in shutdown_aware_handler
+    return handler(*args, **kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\mediapipe\tasks\python\core\mediapipe_c_utils.py", line 142, in dispatcher_wrapper
+    executor.submit(dispatch_and_free).result()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python313\Lib\concurrent\futures\_base.py", line 451, in result
+    self._condition.wait(timeout)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "C:\Python313\Lib\threading.py", line 359, in wait
+    waiter.acquire()
+    ~~~~~~~~~~~~~~^^
+KeyboardInterrupt
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 693, in _process_frame
+    self.persons = self.tracker.track(frame)
+                   ~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Computer-Vision-main\core\tracker.py", line 94, in track
+    results = self._model.track(
+        source=frame,
+    ...<4 lines>...
+        verbose=False,
+    )
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\engine\model.py", line 607, in track
+    return self.predict(source=source, stream=stream, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\engine\model.py", line 564, in predict
+    return self.predictor.predict_cli(source=source) if is_cli else self.predictor(source=source, stream=stream)
+                                                                    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\engine\predictor.py", line 262, in __call__
+    return list(self.stream_inference(source, model, *args, **kwargs))  # merge list of Results into one
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\utils\_contextlib.py", line 40, in generator_context
+    response = gen.send(None)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\engine\predictor.py", line 384, in stream_inference
+    preds = self.inference(im, *args, **kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\engine\predictor.py", line 219, in inference
+    return self.model(im, *args, augment=self.args.augment, embed=self.args.embed, **kwargs)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\autobackend.py", line 331, in forward
+    y = self.backend.forward(im, **forward_kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\backends\pytorch.py", line 96, in forward
+    return self.model(im, augment=augment, embed=embed, **kwargs)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\tasks.py", line 162, in forward
+    return self.predict(x, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\tasks.py", line 179, in predict
+    return self._predict_once(x, profile, embed)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\tasks.py", line 201, in _predict_once
+    x = m(x)  # run
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\modules\head.py", line 194, in forward
+    preds = self.forward_head(x, **self.one2many)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\modules\head.py", line 638, in forward_head
+    preds = super().forward_head(x, box_head, cls_head)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\modules\head.py", line 176, in forward_head
+    boxes = torch.cat([box_head[i](x[i]).view(bs, 4 * self.reg_max, -1) for i in range(self.nl)], dim=-1)
+                       ~~~~~~~~~~~^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\container.py", line 259, in forward
+    input = module(input)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\ultralytics\nn\modules\conv.py", line 98, in forward_fuse
+    return self.act(self.conv(x))
+           ~~~~~~~~^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1783, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\module.py", line 1794, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\modules\activation.py", line 476, in forward
+    return F.silu(input, inplace=self.inplace)
+           ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Baqir\AppData\Roaming\Python\Python313\site-packages\torch\nn\functional.py", line 2447, in silu
+    if has_torch_function_unary(input):
+       ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^
+KeyboardInterrupt
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 821, in _process_frame
+    if (lw_y <= chest_y and lw_conf > 0.3) and (rw_y > chest_y or lw_y < rw_y or rw_conf < 0.3):
+        ^^^^
+UnboundLocalError: cannot access local variable 'lw_y' where it is not associated with a value
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 310, in _toggle_gesture_pause
+    self._set_gesture_paused(not self.is_gesture_paused, speak=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\ui\main_window.py", line 336, in _set_gesture_paused
+    self.voice.speak_text("Gesture mouse paused. Voice only mode active.")
+    ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'VoiceFeedback' object has no attribute 'speak_text'
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 310, in _toggle_gesture_pause
+    self._set_gesture_paused(not self.is_gesture_paused, speak=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\ui\main_window.py", line 336, in _set_gesture_paused
+    self.voice.speak_text("Gesture mouse paused. Voice only mode active.")
+    ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'VoiceFeedback' object has no attribute 'speak_text'
+
+Traceback (most recent call last):
+  File "C:\Computer-Vision-main\ui\main_window.py", line 310, in _toggle_gesture_pause
+    self._set_gesture_paused(not self.is_gesture_paused, speak=True)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Computer-Vision-main\ui\main_window.py", line 336, in _set_gesture_paused
+    self.voice.speak_text("Gesture mouse paused. Voice only mode active.")
+    ^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'VoiceFeedback' object has no attribute 'speak_text'
+

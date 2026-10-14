@@ -10,14 +10,16 @@ from PyQt6.QtWidgets import (
     QMenu, QMessageBox, QCheckBox, QSlider, QDialog, QProgressBar
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QUrl
-from PyQt6.QtGui import QImage, QPixmap, QIcon, QColor, QFont, QDesktopServices
+from PyQt6.QtGui import QImage, QPixmap, QIcon, QColor, QFont, QDesktopServices, QShortcut, QKeySequence
 
 from core.config_manager import ConfigManager
 from core.camera_stream import CameraStream
 from core.tracker import PersonTracker, PersonDetection
 from core.security_engine import SecurityEngine, SecurityState
+from core.signatures import BiometricSignatures
 from core.mouse_controller import DualModeMouseController
 from core.voice_feedback import VoiceFeedback
+from core.voice_control import VoiceControlEngine
 from core.update_manager import UpdateManager
 from ui.floating_indicator import FloatingStatusIndicator
 
@@ -174,6 +176,7 @@ class TeacherControlHub(QMainWindow):
         self.pill = FloatingStatusIndicator()
         self.pill.move(40, 40)
         self.pill.clicked.connect(self._toggle_visibility)
+        self.pill.pause_toggled.connect(self._on_pill_pause_toggled)
         self.pill.show()
 
         # Main processing timer (30 FPS)
@@ -207,7 +210,12 @@ class TeacherControlHub(QMainWindow):
 
         # Security Engine
         self.security = SecurityEngine(
-            lost_timeout_sec=self.config.get("security.lost_timeout_sec", 0.8),
+            lost_timeout_sec=self.config.get("security.lost_timeout_sec", 1.0),
+            face_match_threshold=self.config.get("security.face_match_threshold", 0.40),
+            relock_consecutive_frames=self.config.get("security.relock_consecutive_frames", 8),
+            min_face_size_px=self.config.get("security.min_face_size_px", 32),
+            periodic_face_interval_sec=self.config.get("security.periodic_face_interval_sec", 2.5),
+            adaptive_gallery_max=self.config.get("security.adaptive_gallery_max", 10),
         )
 
         # Mouse Controller
@@ -231,6 +239,13 @@ class TeacherControlHub(QMainWindow):
             alerts=voice_cfg.get("alerts", {}),
         )
 
+        # Voice Control Engine (Hands-Free Dictation, Search, and App Launcher)
+        self.voice_control = VoiceControlEngine(
+            on_command_callback=self._on_voice_command,
+            voice_feedback=self.voice,
+        )
+        self.voice_control.start()
+
         # Camera Stream
         self.stream = CameraStream.from_config(self.config.get_all())
         self.stream.start()
@@ -241,6 +256,98 @@ class TeacherControlHub(QMainWindow):
             current_version=self.config.get("version", "1.0.0"),
             update_url=update_cfg.get("update_url", ""),
         )
+
+        # Guided Enrollment State
+        self.is_enrolling: bool = False
+        self.enrollment_step: int = 0
+        self.enrollment_start_time: float = 0.0
+        self.enrollment_candidate_id: Optional[int] = None
+        self.enrollment_face_embs: list = []
+        self.enrollment_body_props: list = []
+        self.enrollment_status_text: str = ""
+
+        # Gesture Mouse Pause / Resume State (Voice-Only Mode)
+        self.is_gesture_paused: bool = False
+
+        # Hotkeys: F8 or Ctrl+Shift+M toggles Gesture Mouse
+        self.shortcut_pause = QShortcut(QKeySequence("F8"), self)
+        self.shortcut_pause.activated.connect(self._toggle_gesture_pause)
+        self.shortcut_pause_alt = QShortcut(QKeySequence("Ctrl+Shift+M"), self)
+        self.shortcut_pause_alt.activated.connect(self._toggle_gesture_pause)
+
+        # Emergency Stop Hotkey (Ctrl+Alt+Q)
+        self.shortcut_stop = QShortcut(QKeySequence("Ctrl+Alt+Q"), self)
+        self.shortcut_stop.activated.connect(self._emergency_stop)
+
+    def _on_voice_command(self, cmd_type: str, message: str):
+        """Dispatched from background voice listening thread."""
+        QTimer.singleShot(0, lambda: self._handle_voice_ui(cmd_type, message))
+
+    def _handle_voice_ui(self, cmd_type: str, message: str):
+        """Updates UI status and floating pill on the main GUI thread."""
+        if cmd_type == "FREEZE":
+            self._set_gesture_paused(True, speak=False)
+        elif cmd_type == "RESUME":
+            self._set_gesture_paused(False, speak=False)
+
+        if hasattr(self, "pill") and self.pill:
+            self.pill.show_voice_badge(message)
+        if hasattr(self, "status_reason_lbl"):
+            self.status_reason_lbl.setText(f"🎤 {message}")
+
+    def _emergency_stop(self):
+        """Emergency stop hotkey: freezes all mouse movement immediately."""
+        self._set_gesture_paused(True, speak=False)
+        if hasattr(self, "pill") and self.pill:
+            self.pill.show_voice_badge("EMERGENCY STOP")
+
+    def _on_pill_pause_toggled(self, paused: bool):
+        """Dispatched when the pause button on the floating pill is clicked."""
+        self._set_gesture_paused(paused, speak=True)
+
+    def _toggle_gesture_pause(self):
+        """Toggle pause/resume for hand gesture mouse control via button or hotkey."""
+        self._set_gesture_paused(not self.is_gesture_paused, speak=True)
+
+    def _set_gesture_paused(self, paused: bool, speak: bool = False):
+        """Applies pause/resume state across all UI buttons, pill, tray, and voice engine."""
+        self.is_gesture_paused = paused
+        if hasattr(self, "voice_control") and self.voice_control:
+            self.voice_control.is_frozen = paused
+
+        style_amber = (
+            "background-color: #D97706; color: #FFFFFF; font-weight: bold; "
+            "border: 1px solid #F59E0B; border-radius: 6px; padding: 6px 14px;"
+        )
+
+        if paused:
+            if hasattr(self, "btn_pause_mouse"):
+                self.btn_pause_mouse.setText("▶️ Resume Mouse")
+                self.btn_pause_mouse.setStyleSheet(style_amber)
+            if hasattr(self, "btn_pause_sidebar"):
+                self.btn_pause_sidebar.setText("▶️ Resume Gesture Mouse")
+                self.btn_pause_sidebar.setStyleSheet(style_amber)
+            if hasattr(self, "tray_pause_action"):
+                self.tray_pause_action.setText("▶️ Resume Gesture Mouse (F8)")
+            if hasattr(self, "pill") and self.pill:
+                self.pill.set_paused(True)
+                self.pill.show_voice_badge("HAND MOUSE PAUSED")
+            if speak and hasattr(self, "voice") and self.voice:
+                self.voice.speak_text("Gesture mouse paused. Voice only mode active.")
+        else:
+            if hasattr(self, "btn_pause_mouse"):
+                self.btn_pause_mouse.setText("⏸️ Pause Mouse")
+                self.btn_pause_mouse.setStyleSheet("")
+            if hasattr(self, "btn_pause_sidebar"):
+                self.btn_pause_sidebar.setText("⏸️ Pause Gesture Mouse (Voice Only)")
+                self.btn_pause_sidebar.setStyleSheet("")
+            if hasattr(self, "tray_pause_action"):
+                self.tray_pause_action.setText("⏸️ Pause Gesture Mouse (F8)")
+            if hasattr(self, "pill") and self.pill:
+                self.pill.set_paused(False)
+                self.pill.show_voice_badge("HAND MOUSE RESUMED")
+            if speak and hasattr(self, "voice") and self.voice:
+                self.voice.speak_text("Gesture mouse resumed.")
 
     def _init_styles(self):
         """Sleek modern dark-mode stylesheet."""
@@ -323,6 +430,12 @@ class TeacherControlHub(QMainWindow):
         top_bar.addLayout(title_box)
 
         top_bar.addStretch()
+
+        self.btn_pause_mouse = QPushButton("⏸️ Pause Mouse")
+        self.btn_pause_mouse.setProperty("class", "secondary-btn")
+        self.btn_pause_mouse.setToolTip("Pause / Resume hand gesture cursor movement (F8). Voice commands stay active!")
+        self.btn_pause_mouse.clicked.connect(self._toggle_gesture_pause)
+        top_bar.addWidget(self.btn_pause_mouse)
 
         self.btn_hide_feed = QPushButton("👁️ Hide Feed (Classroom Mode)")
         self.btn_hide_feed.setProperty("class", "secondary-btn")
@@ -413,6 +526,12 @@ class TeacherControlHub(QMainWindow):
         sec_header.setStyleSheet("font-size: 14px; font-weight: bold; color: #FFFFFF;")
         sidebar_layout.addWidget(sec_header)
 
+        self.btn_pause_sidebar = QPushButton("⏸️ Pause Gesture Mouse (Voice Only)")
+        self.btn_pause_sidebar.setProperty("class", "secondary-btn")
+        self.btn_pause_sidebar.setToolTip("Temporarily stop hand gesture mouse movements when you only want voice commands (Shortcut: F8).")
+        self.btn_pause_sidebar.clicked.connect(self._toggle_gesture_pause)
+        sidebar_layout.addWidget(self.btn_pause_sidebar)
+
         self.btn_lock = QPushButton("🔒 Lock Me (Enroll Teacher)")
         self.btn_lock.setProperty("class", "primary-btn")
         self.btn_lock.clicked.connect(self._handle_lock_request)
@@ -422,6 +541,11 @@ class TeacherControlHub(QMainWindow):
         self.btn_unlock.setProperty("class", "secondary-btn")
         self.btn_unlock.clicked.connect(self._handle_unlock)
         sidebar_layout.addWidget(self.btn_unlock)
+
+        self.btn_wipe = QPushButton("🗑️ Delete My Data (Wipe)")
+        self.btn_wipe.setProperty("class", "secondary-btn")
+        self.btn_wipe.clicked.connect(self._handle_wipe_data)
+        sidebar_layout.addWidget(self.btn_wipe)
 
         sidebar_layout.addSpacing(10)
 
@@ -463,11 +587,17 @@ class TeacherControlHub(QMainWindow):
         show_action = tray_menu.addAction("Open Control Hub")
         show_action.triggered.connect(self.showNormal)
 
+        self.tray_pause_action = tray_menu.addAction("⏸️ Pause Gesture Mouse (F8)")
+        self.tray_pause_action.triggered.connect(self._toggle_gesture_pause)
+
         lock_action = tray_menu.addAction("Lock Me (Enroll)")
         lock_action.triggered.connect(self._handle_lock_request)
 
         unlock_action = tray_menu.addAction("Unlock Teacher")
         unlock_action.triggered.connect(self._handle_unlock)
+
+        wipe_action = tray_menu.addAction("Delete My Data (Wipe)")
+        wipe_action.triggered.connect(self._handle_wipe_data)
 
         tray_menu.addSeparator()
         quit_action = tray_menu.addAction("Quit")
@@ -513,16 +643,51 @@ class TeacherControlHub(QMainWindow):
             QLineEdit.EchoMode.Password
         )
         if ok and pin_input == teacher_pin:
-            ret, frame = self.stream.read()
-            if ret and frame is not None and self.persons:
-                best = max(self.persons, key=lambda p: p.distance_info.get("proximity_score", 0.0))
-                self.security.enroll(frame, best)
-                self.voice.trigger_alert("locked", force=True)
-            else:
-                QMessageBox.warning(self, "Enrollment", "Please ensure you are standing in front of the camera.")
+            self.is_enrolling = True
+            self.enrollment_step = 1
+            self.enrollment_start_time = time.time()
+            self.enrollment_candidate_id = None
+            self.enrollment_face_embs.clear()
+            self.enrollment_body_props.clear()
+            self.enrollment_status_text = "Stand inside the guide box facing the camera..."
+            QMessageBox.information(
+                self,
+                "Guided Teacher Enrollment",
+                "<b>Starting Guided Enrollment:</b><br><br>"
+                "1. Stand straight inside the guide box on screen.<br>"
+                "2. Ensure you are standing alone in the box.<br>"
+                "3. Follow the live on-screen prompts:<br>"
+                "   • Look at camera (3s)<br>"
+                "   • Turn head slowly left/right (3s)<br>"
+                "   • Look slightly up/down (2s)<br>"
+                "   • Take two steps back/forward (2s)<br><br>"
+                "Click OK and look at the camera screen to begin capture."
+            )
         elif ok:
             QMessageBox.critical(self, "Security Denied", "Incorrect Teacher PIN.")
             self.voice.trigger_alert("unauthorized", force=True)
+
+    def _emergency_stop(self):
+        """Emergency stop hotkey (Ctrl+Alt+Q) freezes mouse immediately."""
+        self.security.unlock()
+        self.mouse.process_near_mode(np.zeros((10, 10, 3), dtype=np.uint8), (10, 10), is_security_unlocked=False)
+        self.voice.trigger_alert("lost", force=True)
+        self.val_state.setText("EMERGENCY STOPPED")
+        self.val_state.setStyleSheet("color: #FF3333; font-size: 16px; font-weight: bold;")
+
+    def _handle_wipe_data(self):
+        reply = QMessageBox.warning(
+            self,
+            "Delete My Data",
+            "Are you sure you want to permanently delete all enrolled biometric signatures?\n"
+            "You will need to re-enroll with your PIN to use gesture control.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.security.wipe_enrollment()
+            self.voice.trigger_alert("lost", force=True)
+            QMessageBox.information(self, "Data Wiped", "All biometric signatures have been permanently deleted.")
 
     def _handle_unlock(self):
         self.security.unlock()
@@ -587,11 +752,15 @@ class TeacherControlHub(QMainWindow):
         self.frame_idx += 1
         h, w = frame.shape[:2]
 
-        # Tracking Cadence: full speed when LOST/Far; interleaved in Near Mode
+        # Tracking Cadence:
+        # - NEAR Mode (Teacher Active): Run YOLO heartbeat every 8 frames to keep CPU free for 30+ FPS MediaPipe hand tracking
+        # - FAR Mode, Enrolling, or LOST: Run YOLO frequently (every 2 frames or every frame) for tracking
+        yolo_heartbeat = 8 if (self.is_teacher_active and self.current_mode == "NEAR") else 2
         should_run_yolo = (
-            not self.is_teacher_active
+            self.is_enrolling
+            or not self.is_teacher_active
             or self.current_mode == "FAR"
-            or (self.frame_idx % 2 == 0)
+            or (self.frame_idx % yolo_heartbeat == 0)
             or len(self.persons) == 0
         )
 
@@ -599,14 +768,90 @@ class TeacherControlHub(QMainWindow):
 
         if should_run_yolo:
             self.persons = self.tracker.track(frame)
-            state, teacher_id, metadata = self.security.update(frame, self.persons)
-            self.is_teacher_active = state in (SecurityState.LOCKED, SecurityState.RE_LOCKED) and teacher_id is not None
+            if not self.is_enrolling:
+                state, teacher_id, metadata = self.security.update(frame, self.persons)
+                self.is_teacher_active = state in (SecurityState.LOCKED, SecurityState.RE_LOCKED) and teacher_id is not None
 
-            # Audio state transitions
-            if state in (SecurityState.LOCKED, SecurityState.RE_LOCKED) and prev_state == SecurityState.LOST:
-                self.voice.trigger_alert("relocked")
-            elif state == SecurityState.LOST and prev_state in (SecurityState.LOCKED, SecurityState.RE_LOCKED):
-                self.voice.trigger_alert("lost")
+                # Audio state transitions
+                if state in (SecurityState.LOCKED, SecurityState.RE_LOCKED) and prev_state == SecurityState.LOST:
+                    self.voice.trigger_alert("relocked")
+                elif state == SecurityState.LOST and prev_state in (SecurityState.LOCKED, SecurityState.RE_LOCKED):
+                    self.voice.trigger_alert("lost")
+
+        # ---------------- Guided Enrollment Pipeline ----------------
+        if self.is_enrolling:
+            self.is_teacher_active = False
+            gx1, gy1 = int(w * 0.22), int(h * 0.08)
+            gx2, gy2 = int(w * 0.78), int(h * 0.92)
+
+            # Filter candidates inside guide box
+            cands_in_box = []
+            for p in self.persons:
+                pcx = (p.bbox[0] + p.bbox[2]) // 2
+                pcy = (p.bbox[1] + p.bbox[3]) // 2
+                if gx1 <= pcx <= gx2 and gy1 <= pcy <= gy2:
+                    cands_in_box.append(p)
+
+            if len(cands_in_box) == 0:
+                self.enrollment_status_text = "Please stand in front of the camera inside the guide box."
+                self.enrollment_start_time = time.time()
+                self.enrollment_candidate_id = None
+            elif len(cands_in_box) > 1:
+                self.enrollment_status_text = "Multiple people detected! Please stand ALONE inside the box."
+                self.enrollment_start_time = time.time()
+                self.enrollment_candidate_id = None
+            else:
+                cand = cands_in_box[0]
+                if self.enrollment_candidate_id != cand.track_id:
+                    self.enrollment_candidate_id = cand.track_id
+                    self.enrollment_start_time = time.time()
+                    self.enrollment_face_embs.clear()
+                    self.enrollment_body_props.clear()
+
+                elapsed = time.time() - self.enrollment_start_time
+                if elapsed < 3.0:
+                    self.enrollment_status_text = f"Phase 1/4: Look directly at the camera ({3.0 - elapsed:.1f}s)"
+                elif elapsed < 6.0:
+                    self.enrollment_status_text = f"Phase 2/4: Turn head slowly left & right ({6.0 - elapsed:.1f}s)"
+                elif elapsed < 8.0:
+                    self.enrollment_status_text = f"Phase 3/4: Look slightly up & down ({8.0 - elapsed:.1f}s)"
+                elif elapsed < 10.0:
+                    self.enrollment_status_text = f"Phase 4/4: Take 2 steps back, then forward ({10.0 - elapsed:.1f}s)"
+                else:
+                    # Finalize Enrollment
+                    median_prop = np.median(self.enrollment_body_props, axis=0) if self.enrollment_body_props else None
+                    success = self.security.enroll(
+                        frame=frame,
+                        target=cand,
+                        additional_face_embs=self.enrollment_face_embs,
+                        enrolled_body_prop=median_prop,
+                    )
+                    self.is_enrolling = False
+                    if success:
+                        self.voice.trigger_alert("locked", force=True)
+                        QMessageBox.information(
+                            self,
+                            "Teacher Enrolled & Locked",
+                            f"Teacher successfully enrolled and locked!\n\n"
+                            f"• Saved {len(self.security.enrolled_face_templates)} multi-angle/distance face signatures.\n"
+                            f"• Track ID #{cand.track_id} locked with fail-closed security.\n"
+                            f"• Identity protected: students can never hijack this session."
+                        )
+                    else:
+                        QMessageBox.warning(self, "Enrollment Failed", "No clear face could be verified. Please retry.")
+
+                # Sample biometric signatures on each frame
+                if self.is_enrolling:
+                    face_info = BiometricSignatures.extract_face_for_person(frame, cand.bbox)
+                    if face_info is not None and face_info.get("width", 0) >= 22:
+                        emb = face_info["embedding"]
+                        if not self.enrollment_face_embs or min([BiometricSignatures.match_face(emb, e)[1] for e in self.enrollment_face_embs]) < 0.90:
+                            self.enrollment_face_embs.append(emb)
+
+                    if cand.keypoints is not None:
+                        props = BiometricSignatures.extract_body_proportions(cand.keypoints)
+                        if props is not None:
+                            self.enrollment_body_props.append(props)
 
         # Active teacher resolution
         teacher_id = self.security.teacher_track_id
@@ -615,38 +860,108 @@ class TeacherControlHub(QMainWindow):
         if teacher_person is not None:
             self.distance_m = teacher_person.distance_info.get("distance_m", 1.0)
             self.current_mode = teacher_person.distance_info.get("mode", "NEAR")
-        elif self.persons:
-            self.distance_m = self.persons[0].distance_info.get("distance_m", 1.0)
-            self.current_mode = self.persons[0].distance_info.get("mode", "NEAR")
+            self._last_active_mode = self.current_mode
+        elif self.is_teacher_active:
+            # Teacher remains LOCKED by zero-trust security engine (prevent 1-frame ID flickers from dropping mode)
+            self.current_mode = getattr(self, "_last_active_mode", "NEAR")
+        else:
+            # Rule 1: NEVER auto-select a fallback person in control loop
+            self.distance_m = 0.0
+            self.current_mode = "FROZEN" if self.security.state == SecurityState.LOST else "IDLE"
 
-        # Execute Mouse Control
-        if self.current_mode == "NEAR":
-            self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=self.is_teacher_active)
-        elif self.current_mode == "FAR" and teacher_person is not None:
-            self.mouse.process_far_mode(teacher_person.right_wrist, (h, w), is_security_unlocked=self.is_teacher_active)
+        # Chest-height gating applies only to Far Mode (macro wrist tracking across room)
+        # In Near Mode (< 3.5m), MediaPipe hand detector provides natural presence & gesture gating
+        is_hand_raised = True
+        if self.current_mode == "FAR" and teacher_person is not None and teacher_person.keypoints is not None:
+            kpts = teacher_person.keypoints
+            sh_conf = max(kpts[5][2], kpts[6][2])
+            hip_conf = max(kpts[11][2], kpts[12][2])
+            if sh_conf > 0.3 and hip_conf > 0.3:
+                sh_y = (kpts[5][1] + kpts[6][1]) / 2.0
+                hip_y = (kpts[11][1] + kpts[12][1]) / 2.0
+                chest_y = sh_y + (hip_y - sh_y) * 0.65
 
-        # Update Metrics Bar & Floating Pill
-        state_str = self.security.state.value
+                rw_y, rw_conf = teacher_person.right_wrist[1], teacher_person.right_wrist[2]
+                lw_y, lw_conf = teacher_person.left_wrist[1], teacher_person.left_wrist[2]
+                is_hand_raised = (rw_y <= chest_y and rw_conf > 0.3) or (lw_y <= chest_y and lw_conf > 0.3)
+
+        # Execute Mouse Control (strictly enabled only when teacher is actively validated, not gesture-paused, and not voice-frozen)
+        is_voice_frozen = getattr(self.voice_control, "is_frozen", False) if hasattr(self, "voice_control") else False
+        is_mouse_active = (
+            self.is_teacher_active
+            and not self.is_enrolling
+            and not self.is_gesture_paused
+            and not is_voice_frozen
+        )
+        if is_mouse_active:
+            if self.current_mode == "NEAR":
+                # Near Mode: MediaPipe autonomously tracks hand with 100% precision
+                self.mouse.reset_far_anchor()
+                self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=True)
+            elif self.current_mode == "FAR" and teacher_person is not None and is_hand_raised:
+                # Far Mode: Dynamically select whichever wrist is raised
+                active_wrist = teacher_person.right_wrist
+                if (lw_y <= chest_y and lw_conf > 0.3) and (rw_y > chest_y or lw_y < rw_y or rw_conf < 0.3):
+                    active_wrist = teacher_person.left_wrist
+                self.mouse.process_far_mode(active_wrist, (h, w), is_security_unlocked=True)
+            else:
+                self.mouse.reset_far_anchor()
+                self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=False)
+        else:
+            # Mouse explicitly frozen when not locked, during enrollment, or when paused for voice-only mode
+            self.mouse.reset_far_anchor()
+            self.mouse.process_near_mode(frame, (h, w), is_security_unlocked=False)
+
+        # Update Metrics Bar & Floating Pill (Rule 7: show exact status reason)
+        state_str = "ENROLLING" if self.is_enrolling else self.security.state.value
+        status_text = self.enrollment_status_text if self.is_enrolling else self.security.status_reason
+        if self.is_gesture_paused or is_voice_frozen:
+            state_str = "PAUSED"
+            status_text = "PAUSED (Voice-Only Mode)"
         self.pill.update_status(state_str, self.current_mode, self.distance_m)
 
-        if state_str in ("LOCKED", "RE_LOCKED"):
-            self.val_state.setText(f"LOCKED (ID #{teacher_id})")
-            self.val_state.setStyleSheet("color: #00FF66; font-size: 20px; font-weight: bold;")
+        if state_str == "PAUSED":
+            self.val_state.setText("PAUSED (Voice Only)")
+            self.val_state.setStyleSheet("color: #F59E0B; font-size: 15px; font-weight: bold;")
+        elif state_str in ("LOCKED", "RE_LOCKED"):
+            self.val_state.setText(f"{state_str} (ID #{teacher_id})")
+            self.val_state.setStyleSheet("color: #00FF66; font-size: 16px; font-weight: bold;")
+        elif state_str == "ENROLLING":
+            self.val_state.setText("ENROLLING TEACHER")
+            self.val_state.setStyleSheet("color: #00DDFF; font-size: 15px; font-weight: bold;")
         elif state_str == "LOST":
-            self.val_state.setText("LOST (FROZEN)")
-            self.val_state.setStyleSheet("color: #FFCC00; font-size: 20px; font-weight: bold;")
+            self.val_state.setText(status_text)
+            self.val_state.setStyleSheet("color: #FFCC00; font-size: 13px; font-weight: bold;")
         else:
-            self.val_state.setText("UNENROLLED")
-            self.val_state.setStyleSheet("color: #AAAAAA; font-size: 20px; font-weight: bold;")
+            self.val_state.setText(status_text)
+            self.val_state.setStyleSheet("color: #AAAAAA; font-size: 13px; font-weight: bold;")
 
-        self.val_mode.setText(f"{self.current_mode} ({self.distance_m:.1f}m)")
+        mode_str = f"{self.current_mode} ({self.distance_m:.1f}m)" if teacher_person is not None else self.current_mode
+        self.val_mode.setText(mode_str)
         fps_val = self.stream.get_fps()
         self.val_fps.setText(f"{fps_val:.1f} FPS")
 
         # Render Video Viewport if feed is visible
         if not self.btn_hide_feed.isChecked():
             display_frame = self.tracker.draw_visuals(frame.copy(), self.persons, teacher_id=teacher_id)
-            # Render QImage
+
+            # Guided Enrollment Overlay
+            if self.is_enrolling:
+                gx1, gy1 = int(w * 0.22), int(h * 0.08)
+                gx2, gy2 = int(w * 0.78), int(h * 0.92)
+                cv2.rectangle(display_frame, (gx1, gy1), (gx2, gy2), (0, 220, 255), 2, cv2.LINE_AA)
+                cv2.rectangle(display_frame, (gx1, gy1 - 32), (gx1 + 270, gy1), (20, 25, 32), -1)
+                cv2.putText(display_frame, "ENROLLMENT GUIDE BOX", (gx1 + 8, gy1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 255), 2, cv2.LINE_AA)
+                # Live status pill at bottom of guide box
+                cv2.rectangle(display_frame, (gx1, gy2), (gx2, gy2 + 36), (15, 18, 24), -1)
+                cv2.putText(display_frame, self.enrollment_status_text, (gx1 + 10, gy2 + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1, cv2.LINE_AA)
+
+            # Rule 7: Visual diagnostic HUD banner on video feed
+            banner_border = (0, 220, 100) if state_str in ("LOCKED", "RE_LOCKED") else (0, 200, 255) if state_str == "ENROLLING" else (0, 180, 255) if state_str == "LOST" else (120, 120, 120)
+            cv2.rectangle(display_frame, (10, 10), (w - 10, 44), (15, 18, 24), -1)
+            cv2.rectangle(display_frame, (10, 10), (w - 10, 44), banner_border, 1)
+            hud_text = f"[{state_str}] {status_text} | Score: {self.security.last_face_score:.2f} | {fps_val:.1f} FPS"
+            cv2.putText(display_frame, hud_text, (20, 33), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1, cv2.LINE_AA)
             rgb_img = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
             ih, iw, ich = rgb_img.shape
             bytes_per_line = ich * iw
@@ -706,6 +1021,8 @@ class TeacherControlHub(QMainWindow):
         self.timer.stop()
         self.stream.stop()
         self.voice.stop()
+        if hasattr(self, 'voice_control') and self.voice_control:
+            self.voice_control.stop()
         self.pill.close()
         self.tray_icon.hide()
         event.accept()

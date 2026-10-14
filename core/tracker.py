@@ -69,8 +69,8 @@ class PersonTracker:
             print(f"[PersonTracker] Loading YOLO pose model '{target}'...")
             self._model = YOLO(target)
             print("[PersonTracker] YOLO model loaded successfully.")
-        except ImportError:
-            print("[PersonTracker] WARNING: 'ultralytics' not yet available. Tracker in standby.")
+        except ImportError as e:
+            print(f"[PersonTracker] WARNING: 'ultralytics' not yet available ({e}). Tracker in standby.")
             self._model = None
         except Exception as e:
             print(f"[PersonTracker] Error loading YOLO model: {e}")
